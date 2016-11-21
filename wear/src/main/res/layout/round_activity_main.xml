@@ -5,15 +5,6 @@
     android:layout_height="match_parent"
     tools:context="com.xiaoyu.run4thirteenweeks.MainActivity"
     tools:deviceIds="wear_round">
-
-    <TextView
-        android:id="@+id/loop"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_centerHorizontal="true"
-        android:paddingTop="24dp"
-        android:textSize="20sp"
-        tools:text="1 laps"/>
     <TextView
         android:id="@+id/text"
         android:layout_width="wrap_content"

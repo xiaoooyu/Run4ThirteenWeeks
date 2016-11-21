@@ -27,19 +27,6 @@
         <EditText
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:inputType="number"
-            android:ems="10"
             android:id="@+id/editTextSprintDuration"/>
-        <TextView
-            android:text="Rest Duration"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:id="@+id/textViewRestDurationHint"/>
-        <EditText
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:inputType="number"
-            android:ems="10"
-            android:id="@+id/editTextRestDuration"/>
     </LinearLayout>
 </RelativeLayout>

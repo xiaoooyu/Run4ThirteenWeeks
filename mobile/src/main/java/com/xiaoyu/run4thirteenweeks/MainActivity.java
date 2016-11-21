@@ -22,17 +22,14 @@ import com.google.android.gms.wearable.DataMap;
 import com.google.android.gms.wearable.PutDataMapRequest;
 import com.google.android.gms.wearable.Wearable;
 
-public class MainActivity extends AppCompatActivity implements GoogleApiClient.ConnectionCallbacks, GoogleApiClient.OnConnectionFailedListener {
-
-    private static final String KEY_SPRINT_DURATION = "sprint_duration";
-    private static final int DEF_SPRINT_DURATION_MIN = 2;
-
-    private static final String KEY_REST_DURATION = "rest_duration";
-    private static final int DEF_REST_DURATION_MIN = 2;
+public class MainActivity extends AppCompatActivity
+    implements GoogleApiClient.ConnectionCallbacks, GoogleApiClient.OnConnectionFailedListener {
 
     private EditText mEditTextSprintDuration;
-    private EditText mEditTextRestDuration;
     private GoogleApiClient mGoogleApiClient;
+
+    private static final String KEY_SPRINT_FORMULA = "sprint_formula";
+    private static final String DEFL_SPRINT_FORMULA = "10-1-15-1-20-1-10";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -54,7 +51,6 @@ public class MainActivity extends AppCompatActivity implements GoogleApiClient.C
         });
 
         mEditTextSprintDuration = (EditText) findViewById(R.id.editTextSprintDuration);
-        mEditTextRestDuration = (EditText) findViewById(R.id.editTextRestDuration);
 
         mGoogleApiClient = new GoogleApiClient.Builder(this,
             this, this)
@@ -68,10 +64,6 @@ public class MainActivity extends AppCompatActivity implements GoogleApiClient.C
 
         if (mEditTextSprintDuration != null) {
             mEditTextSprintDuration.setText(String.valueOf(getSprintDuration()));
-        }
-
-        if (mEditTextRestDuration != null) {
-            mEditTextRestDuration.setText(String.valueOf(getRestDuration()));
         }
 
         mGoogleApiClient.connect();
@@ -106,22 +98,13 @@ public class MainActivity extends AppCompatActivity implements GoogleApiClient.C
         return super.onOptionsItemSelected(item);
     }
 
-    private int getSprintDuration() {
+    private String getSprintDuration() {
         SharedPreferences preferences = getPreferences(MODE_PRIVATE);
-        int sprintDuration = DEF_SPRINT_DURATION_MIN;
-        if (preferences.contains(KEY_SPRINT_DURATION)) {
-            sprintDuration = preferences.getInt(KEY_SPRINT_DURATION, DEF_SPRINT_DURATION_MIN);
+        String sprintDuration = DEFL_SPRINT_FORMULA;
+        if (preferences.contains(KEY_SPRINT_FORMULA)) {
+            sprintDuration = preferences.getString(KEY_SPRINT_FORMULA, DEFL_SPRINT_FORMULA);
         }
         return sprintDuration;
-    }
-
-    private int getRestDuration() {
-        SharedPreferences preferences = getPreferences(MODE_PRIVATE);
-        int restDuration = DEF_REST_DURATION_MIN;
-        if (preferences.contains(KEY_REST_DURATION)) {
-            restDuration = preferences.getInt(KEY_REST_DURATION, DEF_REST_DURATION_MIN);
-        }
-        return restDuration;
     }
 
     private void saveAndSynchronize() {
@@ -129,34 +112,18 @@ public class MainActivity extends AppCompatActivity implements GoogleApiClient.C
 
         saveSprintDuration(preferences);
 
-        saveRestDuration(preferences);
-
         synchronizeDataWithWearable();
-    }
-
-    private void saveRestDuration(SharedPreferences preferences) {
-        if (mEditTextRestDuration != null) {
-            int duration = DEF_REST_DURATION_MIN;
-            try {
-                duration = Integer.parseInt(mEditTextRestDuration.getText().toString());
-            } catch (NumberFormatException ex) {
-
-            }
-
-            SharedPreferences.Editor editor = preferences.edit().putInt(KEY_REST_DURATION, duration);
-            SharedPreferencesCompat.EditorCompat.getInstance().apply(editor);
-        }
     }
 
     private void saveSprintDuration(SharedPreferences preferences) {
         if (mEditTextSprintDuration != null) {
-            int duration = DEF_SPRINT_DURATION_MIN;
+            String formula = DEFL_SPRINT_FORMULA;
             try {
-                duration = Integer.parseInt(mEditTextSprintDuration.getText().toString());
+                formula = mEditTextSprintDuration.getText().toString();
             } catch (NumberFormatException ex) {
 
             }
-            SharedPreferences.Editor editor = preferences.edit().putInt(KEY_SPRINT_DURATION, duration);
+            SharedPreferences.Editor editor = preferences.edit().putString(KEY_SPRINT_FORMULA, formula);
             SharedPreferencesCompat.EditorCompat.getInstance().apply(editor);
         }
     }
@@ -164,8 +131,7 @@ public class MainActivity extends AppCompatActivity implements GoogleApiClient.C
     private void synchronizeDataWithWearable() {
         PutDataMapRequest request = PutDataMapRequest.create("/duration");
         DataMap dataMap = request.getDataMap();
-        dataMap.putInt(KEY_SPRINT_DURATION, getSprintDuration());
-        dataMap.putInt(KEY_REST_DURATION, getRestDuration());
+        dataMap.putString(KEY_SPRINT_FORMULA, getSprintDuration());
         PendingResult<DataApi.DataItemResult> pendingResult =
             Wearable.DataApi.putDataItem(mGoogleApiClient, request.asPutDataRequest());
     }

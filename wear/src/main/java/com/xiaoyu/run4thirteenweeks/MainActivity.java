@@ -37,40 +37,37 @@ public class MainActivity extends WearableActivity
 
     private static final String TAG = "WearMainActivity";
 
-    private static final int SECONDS_PER_MIN = 60;
-    private static final int MINUTES_PER_HOUR = 60;
-    private static final int MILLISECONDS_PER_SECOND = 1000;
+    private static final long SECONDS_PER_MIN = TimeUnit.MINUTES.toSeconds(1);
+    private static final long MINUTES_PER_HOUR = TimeUnit.HOURS.toMinutes(1);
+    private static final long MILLISECONDS_PER_SECOND = TimeUnit.SECONDS.toMillis(1);
 
-    private static int STOP_STATUS = 0;
-    private static int SPRINT_STATUS = 1;
-    private static int REST_STATUS = 2;
-    private static int PAUSE_STATUS = 3;
+    private static int STATUS_STOP = 0;
+    private static int STATUS_START = 1;
+    private static int STATUS_PAUSE = 3;
 
-    private static final String KEY_SPRINT_DURATION = "sprint_duration";
-    private static final int DEF_SPRINT_DURATION_MIN = 2;
-
-    private static final String KEY_REST_DURATION = "rest_duration";
-    private static final int DEF_REST_DURATION_MIN = 2;
+    private static final String KEY_SPRINT_FORMULA = "sprint_formula";
+    private static final String DEFL_SPRINT_FORMULA = "10-1-15-1-20-1-10";
 
     // Milliseconds between waking processor/screen for updates
     private static final long AMBIENT_INTERVAL_MS = TimeUnit.SECONDS.toMillis(2);
 
-    private long mSprintDurationMs;
-    private long mRestDurationMs;
-
     private TextView mTextView;
     private Button mButton;
-    private TextView mLoopView;
 
-    private long mDueTime = 0L;
+    private int mStatus = STATUS_STOP;
 
-    private int mStatus = STOP_STATUS;
-    private int mLoop = 0;
     private long[] vibratePattern = new long[]{0, 300, 200, 300};
+
     private AlarmManager mAmbientStateAlarmManager;
     private PendingIntent mAmbientStatePendingIntent;
 
     private GoogleApiClient mGoogleApiClient;
+
+    private String mSprintFormula;
+    private int[] mSprintArray;
+    private int mSprintIdx = 0;
+    // one phrase due time, which indicates the alarm time
+    private long mSprintUtil = 0L;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -88,7 +85,6 @@ public class MainActivity extends WearableActivity
             public void onLayoutInflated(WatchViewStub stub) {
                 mTextView = (TextView) stub.findViewById(R.id.text);
                 mButton = (Button) stub.findViewById(R.id.button);
-                mLoopView = (TextView) stub.findViewById(R.id.loop);
 
                 if (mButton != null) {
                     mButton.setOnClickListener(MainActivity.this);
@@ -103,10 +99,6 @@ public class MainActivity extends WearableActivity
             .addConnectionCallbacks(this)
             .addOnConnectionFailedListener(this)
             .build();
-    }
-
-    private long calculateMilliseconds(int min) {
-        return min * SECONDS_PER_MIN * MILLISECONDS_PER_SECOND;
     }
 
     @Override
@@ -124,22 +116,31 @@ public class MainActivity extends WearableActivity
         mGoogleApiClient.disconnect();
     }
 
-    private int getSprintDurationMin() {
-        SharedPreferences preferences = getPreferences(MODE_PRIVATE);
-        int durationMin = DEF_SPRINT_DURATION_MIN;
-        if (preferences.contains(KEY_SPRINT_DURATION)) {
-            durationMin = preferences.getInt(KEY_SPRINT_DURATION, DEF_REST_DURATION_MIN);
+    private void flushDuration() {
+        mSprintFormula = getSprintFormula();
+
+        String[] sprints = mSprintFormula.trim().split("-");
+        mSprintArray = new int[sprints.length];
+        for (int i = 0; i < sprints.length; i++) {
+            try {
+                mSprintArray[i] = Integer.parseInt(sprints[i]);
+            } catch (NumberFormatException ex) {
+                mSprintArray[i] = 0;
+            }
         }
-        return durationMin;
+
+        if (mStatus == STATUS_STOP) {
+            initStartView();
+        }
     }
 
-    private int getRestDurationMin() {
+    private String getSprintFormula() {
         SharedPreferences preferences = getPreferences(MODE_PRIVATE);
-        int restMin = DEF_REST_DURATION_MIN;
-        if (preferences.contains(KEY_REST_DURATION)) {
-            restMin = preferences.getInt(KEY_REST_DURATION, DEF_REST_DURATION_MIN);
+        String formula = DEFL_SPRINT_FORMULA;
+        if (preferences.contains(KEY_SPRINT_FORMULA)) {
+            formula = preferences.getString(KEY_SPRINT_FORMULA, DEFL_SPRINT_FORMULA);
         }
-        return restMin;
+        return formula;
     }
 
     private void prepareAlarmService() {
@@ -184,7 +185,7 @@ public class MainActivity extends WearableActivity
     @Override
     public void onClick(View v) {
         if (v.getId() == R.id.button) {
-            if (mStatus == STOP_STATUS) {
+            if (mStatus == STATUS_STOP) {
                 start();
                 mButton.setText("Stop");
             } else {
@@ -196,28 +197,45 @@ public class MainActivity extends WearableActivity
     }
 
     private void stop() {
-        setStartView();
-        mStatus = STOP_STATUS;
+        initStartView();
+        mStatus = STATUS_STOP;
     }
 
-    private void setStartView() {
+    private void initStartView() {
+        mSprintIdx = 0;
         if (mTextView != null) {
-            setRemainingTime(mSprintDurationMs);
+            setRemainingTime(getSprintDuration());
         }
     }
 
     private void start() {
-        long timeMs = System.currentTimeMillis();
+        long now = System.currentTimeMillis();
 
-        if (mStatus == STOP_STATUS || mStatus == REST_STATUS) {
-            mStatus = SPRINT_STATUS;
-            mDueTime = timeMs + mSprintDurationMs;
-        } else if (mStatus == SPRINT_STATUS) {
-            mStatus = REST_STATUS;
-            mDueTime = timeMs + mRestDurationMs;
+        if (mStatus == STATUS_STOP) {
+            mStatus = STATUS_START;
+            mSprintUtil = now + getSprintDuration();
+        } else if (mStatus == STATUS_START) {
+            if (mSprintIdx < mSprintArray.length) {
+                mSprintIdx ++;
+                mSprintUtil = now + getSprintDuration();
+            } else {
+                notifyAllFinish();
+                return;
+            }
         }
-
         refreshDisplayAndSetNextUpdate();
+    }
+
+    private void notifyAllFinish() {
+        mTextView.setText(R.string.done);
+    }
+
+    private long getSprintDuration() {
+        long duration = 0L;
+        if (mSprintIdx >= 0 && mSprintIdx < mSprintArray.length) {
+            duration = TimeUnit.MINUTES.toMillis(mSprintArray[mSprintIdx]);
+        }
+        return duration;
     }
 
     @Override
@@ -231,18 +249,20 @@ public class MainActivity extends WearableActivity
     }
 
     private void refreshDisplayAndSetNextUpdate() {
-        if (mStatus == STOP_STATUS) {
-            setStartView();
+        if (mStatus == STATUS_STOP) {
+            initStartView();
             return;
         }
 
         long timeMs = System.currentTimeMillis();
 
-        if (mDueTime <= timeMs) {
+        if (mSprintUtil <= timeMs) {
             notifyFinish();
+            return;
         } else {
-            setRemainingTime(mDueTime - timeMs);
+            setRemainingTime(mSprintUtil - timeMs);
         }
+
 
         long delayMs = AMBIENT_INTERVAL_MS - (timeMs % AMBIENT_INTERVAL_MS);
         long triggerTimeMs = timeMs + delayMs;
@@ -257,19 +277,8 @@ public class MainActivity extends WearableActivity
         final Vibrator vibe = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
         vibe.vibrate(vibratePattern, -1);
 
-        if (mStatus == REST_STATUS) {
-            mLoop ++;
-            setLoopText();
-        }
-
         if (!isFinishing()) {
             start();
-        }
-    }
-
-    private void setLoopText() {
-        if (mLoopView != null) {
-            mLoopView.setText(String.format("%d laps", mLoop));
         }
     }
 
@@ -280,7 +289,7 @@ public class MainActivity extends WearableActivity
             int minutes = (int) (totalSeconds / SECONDS_PER_MIN % MINUTES_PER_HOUR);
 //            int minutes = totalSeconds
 //            int minutes = (int) (totalSeconds - seconds) % (SECONDS_PER_MIN * MINUTES_PER_HOUR);
-            int hours = (int) totalSeconds / (SECONDS_PER_MIN * MINUTES_PER_HOUR);
+            long hours = totalSeconds / (SECONDS_PER_MIN * MINUTES_PER_HOUR);
 
             Log.d(TAG, String.format("%d seconds = %d hour, %d mins, %d seconds",
                 totalSeconds, hours, minutes, seconds));
@@ -324,31 +333,15 @@ public class MainActivity extends WearableActivity
                     DataMap dataMap = DataMapItem.fromDataItem(item).getDataMap();
 
                     SharedPreferences preferences = getPreferences(MODE_PRIVATE);
-                    saveSprintDuration(preferences, dataMap.getInt(KEY_SPRINT_DURATION, DEF_SPRINT_DURATION_MIN));
-                    saveRestDuration(preferences, dataMap.getInt(KEY_REST_DURATION, DEF_REST_DURATION_MIN));
-
+                    saveFormula(preferences, dataMap.getString(KEY_SPRINT_FORMULA, DEFL_SPRINT_FORMULA));
                     flushDuration();
                 }
             }
         }
     }
 
-    private void saveRestDuration(SharedPreferences preferences, int restMin) {
+    private void saveFormula(SharedPreferences preferences, String strng) {
         SharedPreferences.Editor editor = preferences.edit();
-        SharedPreferencesCompat.EditorCompat.getInstance().apply(editor.putInt(KEY_REST_DURATION, restMin));
-    }
-
-    private void saveSprintDuration(SharedPreferences preferences, int sprintMin) {
-        SharedPreferences.Editor editor = preferences.edit();
-        SharedPreferencesCompat.EditorCompat.getInstance().apply(editor.putInt(KEY_SPRINT_DURATION, sprintMin));
-    }
-
-    private void flushDuration() {
-        mSprintDurationMs = calculateMilliseconds(getSprintDurationMin());
-        mRestDurationMs = calculateMilliseconds(getRestDurationMin());
-
-        if (mStatus == STOP_STATUS) {
-            setStartView();
-        }
+        SharedPreferencesCompat.EditorCompat.getInstance().apply(editor.putString(KEY_SPRINT_FORMULA, strng));
     }
 }

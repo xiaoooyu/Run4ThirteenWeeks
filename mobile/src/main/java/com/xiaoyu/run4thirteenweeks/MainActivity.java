@@ -22,10 +22,15 @@ import com.google.android.gms.wearable.DataMap;
 import com.google.android.gms.wearable.PutDataMapRequest;
 import com.google.android.gms.wearable.Wearable;
 
+import butterknife.BindView;
+import butterknife.ButterKnife;
+
 public class MainActivity extends AppCompatActivity
     implements GoogleApiClient.ConnectionCallbacks, GoogleApiClient.OnConnectionFailedListener {
 
-    private EditText mEditTextSprintDuration;
+    @BindView(R.id.editTextSprintDuration)
+    EditText mEditTextSprintDuration;
+
     private GoogleApiClient mGoogleApiClient;
 
     private static final String KEY_SPRINT_FORMULA = "sprint_formula";
@@ -35,6 +40,7 @@ public class MainActivity extends AppCompatActivity
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+        ButterKnife.bind(this);
 
         Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
@@ -49,8 +55,6 @@ public class MainActivity extends AppCompatActivity
                         .setAction("Action", null).show();
             }
         });
-
-        mEditTextSprintDuration = (EditText) findViewById(R.id.editTextSprintDuration);
 
         mGoogleApiClient = new GoogleApiClient.Builder(this,
             this, this)
